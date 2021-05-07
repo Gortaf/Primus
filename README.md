@@ -1,7 +1,7 @@
 # Primus
 
 ## Qu'est ce que Primus?
-Primus est un petit logiciel Python qui a pour but d'aider les étudiants à l'Université de Montréal en determinant quels cours ne sont pas en conflits d'horaires avec ceux auxquels ils sont déjà inscrits, ceux afin de gagner du temps lors du choix des cours pour un nouvel emploi du temps.
+Primus est un petit logiciel Python qui a pour but d'aider les étudiants à l'Université de Montréal en determinant quels cours ne sont pas en conflits d'horaires avec ceux auxquels ils sont déjà inscrits en analysant synchro.
 
 ## Comment ça marche?
 #### Point de vu utilisateur
