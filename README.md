@@ -15,4 +15,4 @@ D'un point de vu technique, Primus s'appuis sur Selenium pour émuler des naviga
 
 ## À Propos:
 Primus est un "successeur" à ClassFinder, un autre projet que j'avais fait durant ma première année avec le même but en tête. Primus est plus maintenable en terme de programmation, utilise des "webscrapping hooks" plus robustes et à jours sur le centre étudiant, à une manière de determiner la validité d'un cours **beaucoup** robuste, et utilise le multithreading pour réduire le temps d'execution.
-Le nom "Primus" vient de Donjons & Dragon. Primus est le chef des modrons sur le plan de l'ordre "Mechanus". Son but est de transformer le chaos en ordre, tout comme le but de ce logiciel est de transformer le chaos de synchro en un semblant d'ordre.
+Le nom "Primus" vient de Donjons & Dragons. Primus est le chef des modrons sur le plan de l'ordre "Mechanus". Son but est de transformer le chaos en ordre, tout comme le but de ce logiciel est de transformer le chaos de synchro en un semblant d'ordre.
