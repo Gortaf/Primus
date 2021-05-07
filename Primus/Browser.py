@@ -14,6 +14,7 @@ import random as rn
 
 # threading stuff
 import concurrent.futures
+import threading
 
 # webscrapping stuff
 import selenium
@@ -26,14 +27,17 @@ from webdriver_manager.firefox import GeckoDriverManager
 from bs4 import BeautifulSoup
 
 # Classes from other files
-from TimeTable import TimeTable
+from TimeTable import TimeTable, SectionTimeTable, SynchroClass, TimeTree
 
 # A class that wraps a selenium webdriver to execute retrieval of data from
 # the student center. This class should be instancied from the BrowserController
 class Browser():
-    def __init__(self):
+    def __init__(self, controller):
         options = Options()
+        options.headless = True
+        options.add_argument('-headless')
         self.driver = webdriver.Firefox(executable_path=GeckoDriverManager().install(),options=options)
+        self.controller = controller
 
     def wait_for_load_gif(self):
         try:
@@ -45,12 +49,16 @@ class Browser():
                     By.XPATH,'//div[@class="gh-loader-popup-inner"]')))
         except selenium.common.exceptions.TimeoutException:
             pass
-        WebDriverWait(self.driver, 25).until(
-            EC.invisibility_of_element_located((
-                By.XPATH,'//div[@class="gh-loader-popup gh-loader-preinit"]')))
-        WebDriverWait(self.driver, 25).until(
-            EC.invisibility_of_element_located((
-                By.XPATH,'//div[@class="gh-loader-popup-inner"]')))
+
+        try:
+            WebDriverWait(self.driver, 25).until(
+                EC.invisibility_of_element_located((
+                    By.XPATH,'//div[@class="gh-loader-popup gh-loader-preinit"]')))
+            WebDriverWait(self.driver, 25).until(
+                EC.invisibility_of_element_located((
+                    By.XPATH,'//div[@class="gh-loader-popup-inner"]')))
+        except selenium.common.exceptions.TimeoutException:
+            pass
 
     def to_login(self):
         self.driver.get("https://identification.umontreal.ca/cas/login.aspx")
@@ -126,7 +134,7 @@ class Browser():
         return TimeTable(raw_classes, raw_hours), timetable_url
 
     def to_class_list(self):
-        self.wait_for_load_gif()
+        # self.wait_for_load_gif()
         btn_to_class_list = WebDriverWait(self.driver, 20).until(
             EC.element_to_be_clickable((
                 By.ID,'DERIVED_REGFRM1_SSR_PB_SRCH')))
@@ -147,65 +155,154 @@ class Browser():
         self.wait_for_load_gif()
         return blocs_id
 
-    def get_data_from_blocs(self, blocs_id, blocs_nb, ttb_url):
-        for i, bloc_info in enumerate(zip(blocs_id, blocs_nb)):
-            bloc_id, bloc_nb = bloc_info[0], bloc_info[1]
+    def get_data_from_blocs(self, blocs_nb, ttb_url):
+        for bloc_nb in blocs_nb:
             # Naviguates to the class list
-            self.get_data_from_bloc(bloc_id, bloc_nb, ttb_url, i)
+            self.get_data_from_bloc(bloc_nb, ttb_url, 0)
 
 
-    def get_data_from_bloc(self, bloc_id, bloc_nb, ttb_url, cur_iter):
+    def get_data_from_bloc(self, bloc_nb, ttb_url, cur_class):
+
+        # This function will be called recursivly to go through assigned blocs
         self.driver.get(ttb_url)
+        time.sleep(bloc_nb/4)  # small delay to reduce collisions between drivers
         self.to_class_list()
+        self.wait_for_load_gif()
+        bloc_selector = f"a[id=\"DERIVED_SAA_DPR_SSR_EXPAND_COLLAPS${bloc_nb}\"]"
 
+        # We try to acquire all the blocs, so we can go to the one we're looking for
+        # however, bad loads and collisions with other drivers happen, so if the
+        # blocs cannot be located, we try again from the ttb page
         try:
             bloc = WebDriverWait(self.driver, 5).until(
-                EC.presence_of_all_elements_located((
-                    By.ID, bloc_id)))
+                EC.presence_of_element_located((
+                    By.CSS_SELECTOR, bloc_selector)))
 
         except selenium.common.exceptions.TimeoutException:
-            # print(ttb_url)
-            self.get_data_from_bloc(bloc_id, bloc_nb, ttb_url, cur_iter)
-            # time.sleep(60)
+            self.get_data_from_bloc(bloc_nb, ttb_url, cur_class)
             return
 
         # developps the blocs menu
-        print(f"this one's good: {bloc_nb}")
-        print(bloc_nb, cur_iter)
-        #FIXME
-        # apparament le click doesn't always go through... I have no idea why, need to test
-        # the selenium element objects
-        #HINT
-        # maybe using the onclick script element of those arrows will help
-        # need to test how synchro reacts with that.
+        self.wait_for_load_gif()
         if not (bloc_nb == 0):
             bloc.click()
-        print(f"tr[id^=\"trCOURSE_LIST${bloc_nb}\"]")
 
         # Acquires every row of the bloc
         self.wait_for_load_gif()
-        bloc_rows = WebDriverWait(self.driver, 20).until(
-            EC.presence_of_all_elements_located((
-                By.CSS_SELECTOR, f"tr[id^=\"trCOURSE_LIST${bloc_nb}\"]")))
-        print(bloc_rows)
+        try:
+            bloc_rows = WebDriverWait(self.driver, 5).until(
+                EC.presence_of_all_elements_located((
+                    By.CSS_SELECTOR, f"tr[id^=\"trCOURSE_LIST${bloc_nb}\"]")))
+
+        except selenium.common.exceptions.TimeoutException:
+            self.get_data_from_bloc(bloc_nb, ttb_url, cur_class)
+            return
+
+        # Decomposing the bloc's table to extract the row of the class we're looking for
+        row_data = bloc_rows[cur_class].find_elements_by_tag_name("td")
+        row_sigle, row_link, row_status = row_data[0].text, row_data[1], row_data[5]
+
+        # Detecting the class's status (last col)
+        # if len(row_status.find_elements_by_tag_name("span")) == 0:
+        #     # print("Class hasn't been taken")
+        # else:
+        #     # print("Class was either done, is in progress or was failed or abandonned")  #TODO: Distinguishe some of those cases
+
+        # Acquiring the link on which to click ot get to the class page, and clicking
+        row_link.find_element_by_tag_name("a").click()
+
+        # Then we scrap the class's page. Actually treating the data to check
+        # compatibility is done on an another thread by the controller
+        class_object = self.acquire_class_timetables(row_sigle)
+        threading.Thread(target=self.controller.check_compatibility, args=[class_object]).start()
+
+        # Recursivly calls itself if nescessary, with the nescessary parameters
+        if cur_class+1 < len(bloc_rows):
+            self.get_data_from_bloc(bloc_nb, ttb_url, cur_class+1)
+            return
+        else:
+            return
+
+    def acquire_class_timetables(self, class_name):
+
+        # Acquiring the big table with group names & timetables
+        self.wait_for_load_gif()
+
+        sections_name_elems = WebDriverWait(self.driver, 20).until(
+                EC.presence_of_all_elements_located((
+                    By.CSS_SELECTOR, 'a[id^="CLASS_SECTION$"]')))
+
+        sections_table_elems = WebDriverWait(self.driver, 20).until(
+                EC.presence_of_all_elements_located((
+                    By.CSS_SELECTOR, 'table[id^="CLASS_MTGPAT$scroll$"]')))
+
+        # We are now going to build SectionTimeTables based on the tables
+        # for each section available
+        sections = dict()
+        # First, we see which section "category" this table is (TH, TP, LAB, etc...)
+        for name, table in zip(sections_name_elems, sections_table_elems):
+            section_cat = name.text[name.text.rindex("_")+1: name.text.index("(")]
+            rows = table.find_element_by_tag_name("tbody").find_elements_by_tag_name("tr")
+            section_hours = []
+            # Then we decompose the associated timetable into something we can use
+            for row in rows:
+                cells = row.find_elements_by_tag_name("td")
+                day = cells[0].text
+                hour_start = cells[1].text
+                hour_end = cells[2].text
+                section_hours.append([day, hour_start, hour_end])
+
+            # We wrap the timetable into an nice object
+            section = SectionTimeTable(name.text, section_hours)
+            # We check if there's already an entry for that section type
+            # if there isn't, we add one. If there is, we append to it
+            if section_cat in sections.keys():
+                sections[section_cat].append(section)
+
+            else:
+                sections[section_cat] = [section]
+
+        # The SynchroClass is a wrapper for several SectionTimeTables and additional info
+        # essentially, an internal dictionnary gives infos on all the sections
+        # available for each section "category", as we need at least one
+        # valid combination of each category
+        return SynchroClass(class_name, sections)
 
 
     def end(self):
         self.driver.quit()
 
-
-# A controller class that manages multiple Browsers over muliple threads,
+# A controller class that manages multiple Browsers over multiple threads,
 # and coordinates them to retrieve information from the student center at
 # an optimised rate
 class BrowserController():
-    def __init__(self, threads = 2):
+    def __init__(self, ui, threads = 4):
         tqdm.write(f"[PRIMUS: BrowserController] - creating {threads} browser instances...")
         with concurrent.futures.ThreadPoolExecutor() as exe:
-            futures = [exe.submit(Browser) for t in range(threads)]
+            futures = [exe.submit(Browser, self) for t in range(threads)]
         self.browsers = [b.result() for b in futures]
         tqdm.write(f"[PRIMUS: BrowserController] - browser instances ready.")
+        self.ui = ui
 
     def login_sequence(self, user, unip):
+        """
+        The first sequence. Will have all the browsers go to the login page
+        of synchro and attempt to login with the provided creditentials.
+        TODO: differential login sequence to avoid locking with bad creditentials
+
+        Parameters
+        ----------
+        user : str
+            The username with which the browsers will attempt to connect (pXXXXXX)
+        unip : str
+            The password (UNIP) with which the browsers will attempt to connect
+
+        Returns
+        -------
+        result : bool
+            True if the connection was succesfull, False if anything wrong happened
+
+        """
         tqdm.write("[PRIMUS: BrowserController] - naviguating browsers to login page...")
         with concurrent.futures.ThreadPoolExecutor() as exe:
             futures = [exe.submit(browser.to_login) for browser in self.browsers]
@@ -215,10 +312,21 @@ class BrowserController():
             futures = [exe.submit(browser.login_with, user, unip) for browser in self.browsers]
 
         result = futures[0].result()
-        tqdm.write(f"[PRIMUS: BrowserController] - sequence complete. Browser 0 returned {result}")
+        tqdm.write(f"[PRIMUS: BrowserController] - sequence complete. Browser 0 returned a login status of: {result}")
         return result
 
     def session_selection_sequence(self):
+        """
+        The second sequence. Should only be called after a succesful login sequence
+        This will get all the browsers to the session selection page, and acquire the
+        available sessions so the user can choose which one to use
+
+        Returns
+        -------
+        sessions : list(str)
+            A list containing all the available sessions the user can choose from
+
+        """
         tqdm.write("[PRIMUS: BrowserController] - attempting to retrieve sessions...")
         with concurrent.futures.ThreadPoolExecutor() as exe:
             futures = [exe.submit(browser.to_session_selection) for browser in self.browsers]
@@ -228,6 +336,17 @@ class BrowserController():
         return sessions
 
     def session_timetable_sequence(self, sess_id):
+        """
+        The third sequence. This will save the session choice, and will have the
+        leader browser (browser 0) go to the "search" page, and acquire the
+        timetable of currently selected classes from there.
+
+        Parameters
+        ----------
+        sess_id : int
+            The id to use in the list of sessions.
+
+        """
         tqdm.write(f"[PRIMUS: BrowserController] - acquiring root timetable from session {sess_id}.")
         # with concurrent.futures.ThreadPoolExecutor() as exe:
             # futures = [exe.submit(browser.select_session, sess_id) for browser in self.browsers]
@@ -236,7 +355,14 @@ class BrowserController():
         self.sess_id = sess_id
 
     def acquire_bloc_distribution_sequence(self):
-        tqdm.write("[PRIMUS: BrowserController] - Maneuvering browser 0 to acquire all blocs")
+        """
+        The fourth sequence. This should only be called after the third sequence.
+        The browser 0 will search one time for all available class to acquire the number
+        of blocs. This is done so blocs can be distributed upon all browsers in
+        different threads
+
+        """
+        tqdm.write("[PRIMUS: BrowserController] - maneuvering browser 0 to acquire all blocs")
         self.browsers[0].to_class_list()
         self.blocs = self.browsers[0].acquire_all_blocs(self.ttb_url)
         tqdm.write(f"[PRIMUS: BrowserController] - {len(self.blocs)} blocs were found. Beginning distribution.")
@@ -250,7 +376,7 @@ class BrowserController():
         self.dis = [list(bloc) for bloc in zip(*[iblocs for i in range(distribution_indice)])]
         nblocs = iter([i for i,b in enumerate(self.blocs)])
         self.dis_nb = [list(bloc) for bloc in zip(*[nblocs for i in range(distribution_indice)])]
-        tqdm.write(f"[PRIMUS: BrowserController] - Distriution of {len(self.blocs)} blocs over {len(self.dis)} threads ready.")
+        tqdm.write(f"[PRIMUS: BrowserController] - distriution of {len(self.blocs)} blocs over {len(self.dis)} threads ready.")
 
         # If the division had extras, we need to redistribute them over the non-extra subslists
         if len(self.dis) != len(self.browsers):
@@ -260,32 +386,75 @@ class BrowserController():
                 self.dis[i].append(extra)
 
     def main_extraction_sequence(self):
+        """
+        The big daddy sequence. This will get distribute the blocs upon each
+        browsers, and unleash them to acquire all the data over different threads
+
+        """
         if not hasattr(self, "dis"):
             return
 
         with concurrent.futures.ThreadPoolExecutor() as exe:
             for i, browser in enumerate(self.browsers):
                 blocs, blocs_nb = self.dis[i], self.dis_nb[i]
-                exe.submit(browser.get_data_from_blocs, blocs, blocs_nb, self.ttb_url)
+                exe.submit(browser.get_data_from_blocs, blocs_nb, self.ttb_url)
+
+        tqdm.write("[PRIMUS: BrowserController] - main sequence is done!")
 
     def end_sequence(self):
+        """
+        This should ALWAYS be called no matter what at the end, even if exceptions
+        were raised. Failure to execute this procedure will result in heavy files
+        (that should be temporary) not being deleted by geckodriver.
+        If you fail to call this sequence, the location of the temporary files
+        should be: AppData/Local/Temp, any folrder name "rust_mozprofile*****"
+        so you can delete these by hand.
+        Again, this is easely avoided by just making sure this is called no matter what
+
+        """
+
         tqdm.write("[PRIMUS: BrowserController] - attempting to safely end all browser instances.")
         with concurrent.futures.ThreadPoolExecutor() as exe:
             for browser in self.browsers:
                 exe.submit(browser.end)
         tqdm.write("[PRIMUS: BrowserController] - browsers were safely closed.")
 
-if __name__ == "__main__":
-    # import traceback
-    try:
-        browser_controller = BrowserController(threads=3)
-        browser_controller.login_sequence("pXXXXXX", "mot de passe")
-        browser_controller.session_selection_sequence()
-        browser_controller.session_timetable_sequence(2)
-        browser_controller.acquire_bloc_distribution_sequence()
-        browser_controller.main_extraction_sequence()
-    except Exception as error:
-        # traceback.print_exc(error)
-        print("An error occured")
-        print(error)
-    browser_controller.end_sequence()
+    def check_compatibility(self, class_object):
+        """
+        This method is called by the browsers in a thread to check compatibility
+        of a class.
+
+        Parameters
+        ----------
+        class_object : SynchroClass
+            The SynchroClass object made by the browser.
+
+        """
+        if not hasattr(self, "ttb"):
+            tqdm.write("[PRIMUS: BrowserController] - Attempted to check a class compatibility without reference table... This is problematics")
+            return
+
+        timetree = TimeTree(self.ttb)
+        tqdm.write(f"[PRIMUS: Browser] - now testing: {class_object.class_name}")
+        for i, sections_keyval in enumerate(class_object.sections_timetable.items()):
+            sections = sections_keyval[1]
+            sections_key = sections_keyval[0]
+            tree_expand_results = list()
+
+            for section in sections:
+                tree_expand_results.append(timetree.extand(section))
+
+            timetree.commit_new_leafs()
+
+            if not any(tree_expand_results):
+                tqdm.write(f"[PRIMUS: Browser] - {class_object.class_name} is INVALID")
+                self.ui.add_result(class_object.class_name, "invalid")
+                return
+
+        else:
+            if timetree.check_fully_known():
+                tqdm.write(f"[PRIMUS: Browser] - {class_object.class_name} is VALID")
+                self.ui.add_result(class_object.class_name, "valid")
+            else:
+                tqdm.write(f"[PRIMUS: Browser] - {class_object.class_name} is UNKNOWN")
+                self.ui.add_result(class_object.class_name, "unknown")

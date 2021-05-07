@@ -26,7 +26,7 @@ from Browser import Browser, BrowserController
 # A small class that wraps all of the software's information
 class Infos():
     def __init__(self):
-        self.version = "0.0.1"
+        self.version = "0.0.1 <BETA>"
         self.author = "Nicolas Jacquin"
 
 # This class represents the main UI frame
@@ -34,7 +34,7 @@ class Interface(tk.Frame):
     def __init__(self, fenetre, *args, **kwargs):
 
         # Initialising browserController
-        self.browser_controller = BrowserController()
+        self.browser_controller = BrowserController(self, threads = 5)
 
         # Setting up the main frame informations & on_close event
         infos = Infos()
@@ -100,22 +100,25 @@ class Interface(tk.Frame):
         self.val_sess_btn.configure(state=tk.DISABLED)
         self.val_sess_btn.grid(column=0, row=2, pady=5, padx=12)
 
+        # Label de la sequence principale
+        self.notice_label_main = tk.Label(self, bg="#1a1818", text="En attente de selection de sessions...", fg="#bfbcbb", relief="ridge", borderwidth=4)
+        self.notice_label_main.grid(row=1, column=1, sticky=tk.S, pady=100)
+
         # Output zones
         self.invalid_label = tk.Label(self.right_div, bg="#1a1818", text="↓ Cours invalides ↓", fg="#b80d1b", relief="ridge", borderwidth=2)
         self.invalid_label.grid(row=0, column=0, sticky=tk.S, padx=5, pady=2)
-        self.invalid_text = tk.Label(self.right_div, text="", bg="white", width=15, height=10, anchor=tk.NW, padx=15, pady=15)
+        self.invalid_text = tk.Label(self.right_div, text="", bg="white", fg="red", width=15, height=15, padx=15, pady=15)
         self.invalid_text.grid(row=1, column=0, padx=5)
         self.right_div.grid_columnconfigure(1, minsize=30)
         self.unknown_label = tk.Label(self.right_div, bg="#1a1818", text="↓ Cours inconnus ↓", fg="#f77707", relief="ridge", borderwidth=2)
         self.unknown_label.grid(row=0, column=2, sticky=tk.S, padx=5, pady=2)
-        self.unknown_text = tk.Label(self.right_div, text="", bg="white", width=15, height=10, anchor=tk.NW, padx=15, pady=15)
+        self.unknown_text = tk.Label(self.right_div, text="", bg="white", fg="orange", width=15, height=15, padx=15, pady=15)
         self.unknown_text.grid(row=1, column=2, padx=5)
         self.right_div.grid_rowconfigure(2, minsize=30)
         self.valid_label = tk.Label(self.right_div, bg="#1a1818", text="↓ Cours valides ↓", fg="#2bd918", relief="ridge", borderwidth=2)
         self.valid_label.grid(row=3, column=0, pady=2, columnspan=3)
-        self.valid_text = tk.Label(self.right_div, text="", bg="white", width=40, height=10, anchor=tk.NW, padx=15, pady=15)
+        self.valid_text = tk.Label(self.right_div, text="", bg="white", fg="green", width=40, height=10, padx=15, pady=15)
         self.valid_text.grid(row=4, column=0, columnspan=3, padx=5)
-
 
     # Event for "hover in" effect on right & left div
     def hover_in(self, event, frame):
@@ -184,11 +187,38 @@ class Interface(tk.Frame):
         # Disables the second field's entry points
         self.val_sess_btn.configure(state=tk.DISABLED)
         self.session_menu.configure(state=tk.DISABLED)
-        self.notice_label_sess.configure(fg="#bfbcbb", text="En attente de synchro...")
+        self.notice_label_sess.configure(fg="#bfbcbb", text="Préparations en cours...")
 
         # Executer la selection de session et acquisition de la table de temps
         self.browser_controller.session_timetable_sequence(selection)
+        self.browser_controller.acquire_bloc_distribution_sequence()
 
+        self.notice_label_sess.configure(fg="#2bd918", text="Préparations terminées!")
+        self.notice_label_main.configure(fg="#ffffff", text="Séquence principale en cours!")
+
+        self.browser_controller.main_extraction_sequence()
+
+        self.notice_label_main.configure(fg="#2bd918", text="Séquence principale terminée!")
+
+    def add_result(self, class_name, field):
+        to_add = f"{class_name}  "
+        if field == "valid":
+            zone = self.valid_text
+            max_chars = 30
+
+        else:
+            max_chars = 10
+            if field == "invalid":
+                zone = self.invalid_text
+
+            elif field == "unknown":
+                zone = self.unknown_text
+
+        last_line = zone["text"].split("\n")[-1]
+        if len(last_line+to_add) > max_chars:
+            to_add+="\n"
+
+        zone.configure(text=zone["text"]+to_add)
 
 # A wrapper of tk.Entry for showing defaults
 class TextField(tk.Entry):
