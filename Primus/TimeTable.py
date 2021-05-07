@@ -40,7 +40,6 @@ class TimeTable():
                     continue
                 self.day_dic[splitted[0]].append(HourInterval(splitted[1], splitted[2]))
 
-    # FIXME: How in the nine hells can this return None??????
     def compatible_with(self, other):
         for self_day, other_day in zip(self.day_dic.values(), other.day_dic.values()):
             if len(self_day) == 0 or len(other_day) == 0:
