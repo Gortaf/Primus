@@ -213,7 +213,8 @@ class Browser():
 
         # Then we scrap the class's page. Actually treating the data to check
         # compatibility is done on an another thread by the controller
-        class_object = self.acquire_class_timetables(row_sigle)
+        callback_args = (bloc_nb, ttb_url, cur_class)
+        class_object = self.acquire_class_timetables(row_sigle, callback_args)
         threading.Thread(target=self.controller.check_compatibility, args=[class_object]).start()
 
         # Recursivly calls itself if nescessary, with the nescessary parameters
@@ -223,18 +224,21 @@ class Browser():
         else:
             return
 
-    def acquire_class_timetables(self, class_name):
+    def acquire_class_timetables(self, class_name, callback_args):
 
         # Acquiring the big table with group names & timetables
         self.wait_for_load_gif()
 
-        sections_name_elems = WebDriverWait(self.driver, 20).until(
-                EC.presence_of_all_elements_located((
-                    By.CSS_SELECTOR, 'a[id^="CLASS_SECTION$"]')))
+        try:
+            sections_name_elems = WebDriverWait(self.driver, 20).until(
+                    EC.presence_of_all_elements_located((
+                        By.CSS_SELECTOR, 'a[id^="CLASS_SECTION$"]')))
 
-        sections_table_elems = WebDriverWait(self.driver, 20).until(
-                EC.presence_of_all_elements_located((
-                    By.CSS_SELECTOR, 'table[id^="CLASS_MTGPAT$scroll$"]')))
+            sections_table_elems = WebDriverWait(self.driver, 20).until(
+                    EC.presence_of_all_elements_located((
+                        By.CSS_SELECTOR, 'table[id^="CLASS_MTGPAT$scroll$"]')))
+        except selenium.common.exceptions.TimeoutException:
+            self.get_data_from_bloc(*callback_args)
 
         # We are now going to build SectionTimeTables based on the tables
         # for each section available
@@ -369,6 +373,7 @@ class BrowserController():
 
         # Calculate the number of blocs per browsers (there might be extras)
         distribution_indice = len(self.blocs)//len(self.browsers)
+        print(distribution_indice)
 
         # Creates a list of list where every sublist is a list of blocs for a browser
         # to investigate
@@ -376,7 +381,6 @@ class BrowserController():
         self.dis = [list(bloc) for bloc in zip(*[iblocs for i in range(distribution_indice)])]
         nblocs = iter([i for i,b in enumerate(self.blocs)])
         self.dis_nb = [list(bloc) for bloc in zip(*[nblocs for i in range(distribution_indice)])]
-        tqdm.write(f"[PRIMUS: BrowserController] - distriution of {len(self.blocs)} blocs over {len(self.dis)} threads ready.")
 
         # If the division had extras, we need to redistribute them over the non-extra subslists
         if len(self.dis) != len(self.browsers):
@@ -384,6 +388,7 @@ class BrowserController():
             # The length of the extras will never surpass the number of browsers (euclidian division principal)
             for i, extra in enumerate(extras):
                 self.dis[i].append(extra)
+        tqdm.write(f"[PRIMUS: BrowserController] - distribution of {len(self.blocs)} blocs over {len(self.dis)} threads ready.")
 
     def main_extraction_sequence(self):
         """
