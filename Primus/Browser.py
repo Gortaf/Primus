@@ -34,8 +34,8 @@ from TimeTable import TimeTable, SectionTimeTable, SynchroClass, TimeTree
 class Browser():
     def __init__(self, controller):
         options = Options()
-        # options.headless = True
-        # options.add_argument('-headless')
+        options.headless = True
+        options.add_argument('-headless')
         self.driver = webdriver.Firefox(executable_path=GeckoDriverManager().install(),options=options)
         self.controller = controller
 
