@@ -26,7 +26,7 @@ from Browser import Browser, BrowserController
 # A small class that wraps all of the software's information
 class Infos():
     def __init__(self):
-        self.version = "0.0.2 <BETA>"
+        self.version = "0.0.3 <BETA>"
         self.author = "Nicolas Jacquin"
 
 # This class represents the main UI frame

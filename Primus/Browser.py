@@ -34,8 +34,8 @@ from TimeTable import TimeTable, SectionTimeTable, SynchroClass, TimeTree
 class Browser():
     def __init__(self, controller):
         options = Options()
-        options.headless = True
-        options.add_argument('-headless')
+        # options.headless = True
+        # options.add_argument('-headless')
         self.driver = webdriver.Firefox(executable_path=GeckoDriverManager().install(),options=options)
         self.controller = controller
 
@@ -290,9 +290,10 @@ class BrowserController():
 
     def login_sequence(self, user, unip):
         """
-        The first sequence. Will have all the browsers go to the login page
-        of synchro and attempt to login with the provided creditentials.
-        TODO: differential login sequence to avoid locking with bad creditentials
+        The first sequence. Browser 0 will attempt to connect first to check if
+        the creditentials are valid. If they are valid, all browers will then login
+        with the same creditentials. If they aren't, login sequence is aborted
+        to avoid locking the user's synchro account from too may failed attempts.
 
         Parameters
         ----------
@@ -312,11 +313,18 @@ class BrowserController():
             futures = [exe.submit(browser.to_login) for browser in self.browsers]
 
         tqdm.write(f"[PRIMUS: BrowserController] - attempting to connect as {user}...")
+        connected = self.browsers[0].login_with(user, unip)
+        if not connected:
+            tqdm.write("[PRIMUS: BrowserController] - an error happened when attempting to login. Please check your creditentials.")
+            return False
         with concurrent.futures.ThreadPoolExecutor() as exe:
-            futures = [exe.submit(browser.login_with, user, unip) for browser in self.browsers]
+            futures = [exe.submit(browser.login_with, user, unip) for browser in self.browsers[1:]]
 
-        result = futures[0].result()
-        tqdm.write(f"[PRIMUS: BrowserController] - sequence complete. Browser 0 returned a login status of: {result}")
+        result = all([future.result() for future in futures])
+        if result:
+            tqdm.write("[PRIMUS: BrowserController] - all browsers successfully logined!")
+        else:
+            tqdm.write("[PRIMUS: BrowserController] - at least one browser didn't manage to login. This may cause classes to not be checked.")
         return result
 
     def session_selection_sequence(self):
