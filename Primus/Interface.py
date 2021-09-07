@@ -26,7 +26,7 @@ from Browser import Browser, BrowserController
 # A small class that wraps all of the software's information
 class Infos():
     def __init__(self):
-        self.version = "0.0.3 <BETA>"
+        self.version = "0.0.5 <BETA>"
         self.author = "Nicolas Jacquin"
 
 # This class represents the main UI frame
@@ -45,7 +45,7 @@ class Interface(tk.Frame):
         # Attributs referenced by widgets
         self.user_text = str()
         self.mdp_text = str()
-        self.session_text = tk.StringVar(self.fenetre)
+        self.session_menu_text = tk.StringVar(self.fenetre)
         self.bg_col = "#2c2f33"  # lightmode hex: #f0f0ed
         self.bg_col_hover = "#23272a"
         self.is_working = False
@@ -93,7 +93,7 @@ class Interface(tk.Frame):
         # Session selection zone
         self.notice_label_sess = tk.Label(self.left_bot_div, bg="#1a1818", text="En attente de connexion...", fg="#bfbcbb", relief="ridge", borderwidth=2)
         self.notice_label_sess.grid(column=0, row=0, padx=5, pady=5)
-        self.session_menu = tk.OptionMenu(self.left_bot_div, self.session_text, "")
+        self.session_menu = tk.OptionMenu(self.left_bot_div, self.session_menu_text, "")
         self.session_menu.configure(state=tk.DISABLED, width=24)
         self.session_menu.grid(column=0, row=1, pady=5, padx=5)
         self.val_sess_btn = tk.Button(self.left_bot_div, text="Selectionner", command=lambda: threading.Thread(target=self.second_sequence).start())
@@ -105,20 +105,25 @@ class Interface(tk.Frame):
         self.notice_label_main.grid(row=1, column=1, sticky=tk.S, pady=100)
 
         # Output zones
+        self.session_label = tk.Label(self.right_div, bg="#1a1818", text="↓ Cours inscrits ↓", fg="#34ebe8", relief="ridge", borderwidth=2)
+        self.session_label.grid(row=0, column=0, sticky=tk.N, columnspan=3)
+        self.session_text = tk.Label(self.right_div, bg="white", fg="#30D6D4", width=35, height=8, padx=15, pady=15)
+        self.session_text.grid(row=1, column=0, columnspan=3, padx=5)
         self.invalid_label = tk.Label(self.right_div, bg="#1a1818", text="↓ Cours invalides ↓", fg="#b80d1b", relief="ridge", borderwidth=2)
-        self.invalid_label.grid(row=0, column=0, sticky=tk.S, padx=5, pady=2)
+        self.invalid_label.grid(row=2, column=0, sticky=tk.S, padx=5, pady=2)
         self.invalid_text = tk.Label(self.right_div, text="", bg="white", fg="red", width=15, height=15, padx=15, pady=15)
-        self.invalid_text.grid(row=1, column=0, padx=5)
+        self.invalid_text.grid(row=3, column=0, padx=5)
         self.right_div.grid_columnconfigure(1, minsize=30)
         self.unknown_label = tk.Label(self.right_div, bg="#1a1818", text="↓ Cours inconnus ↓", fg="#f77707", relief="ridge", borderwidth=2)
-        self.unknown_label.grid(row=0, column=2, sticky=tk.S, padx=5, pady=2)
+        self.unknown_label.grid(row=2, column=2, sticky=tk.S, padx=5, pady=2)
         self.unknown_text = tk.Label(self.right_div, text="", bg="white", fg="orange", width=15, height=15, padx=15, pady=15)
-        self.unknown_text.grid(row=1, column=2, padx=5)
+        self.unknown_text.grid(row=3, column=2, padx=5)
         self.right_div.grid_rowconfigure(2, minsize=30)
         self.valid_label = tk.Label(self.right_div, bg="#1a1818", text="↓ Cours valides ↓", fg="#2bd918", relief="ridge", borderwidth=2)
-        self.valid_label.grid(row=3, column=0, pady=2, columnspan=3)
+        self.valid_label.grid(row=5, column=0, pady=2, columnspan=3)
         self.valid_text = tk.Label(self.right_div, text="", bg="white", fg="green", width=40, height=10, padx=15, pady=15)
-        self.valid_text.grid(row=4, column=0, columnspan=3, padx=5)
+        self.valid_text.grid(row=6, column=0, columnspan=3, padx=5)
+
 
     # Event for "hover in" effect on right & left div
     def hover_in(self, event, frame):
@@ -152,10 +157,8 @@ class Interface(tk.Frame):
         result = self.browser_controller.login_sequence(user, unip)
 
         # Checks if the connection was a success
-        #TODO Check for all browsers results. You never know when a thread screws up#
         if not result:
             # If connection failed, we re-enable the entry field for another try.
-            #TODO handle too many failed attemps locking. It won't crash the code, but user should be notified#
             self.val_cred_btn.config(state=tk.NORMAL)
             self.user_row.config(state=tk.NORMAL)
             self.mdp_row.config(state=tk.NORMAL)
@@ -171,16 +174,16 @@ class Interface(tk.Frame):
         self.notice_label_sess.configure(text="Récupération des sessions...")
         self.sessions = self.browser_controller.session_selection_sequence()
         for sess in self.sessions:
-            self.session_menu["menu"].add_command(label=sess, command=tk._setit(self.session_text, sess))
+            self.session_menu["menu"].add_command(label=sess, command=tk._setit(self.session_menu_text, sess))
 
-        self.session_text.set(self.sessions[-1])
+        self.session_menu_text.set(self.sessions[-1])
         self.session_menu.configure(state=tk.NORMAL)
         self.notice_label_sess.configure(fg="#ffffff", text="↓ Choisir une session ↓")
         self.val_sess_btn.configure(state=tk.NORMAL)
 
     def second_sequence(self):
         try:
-            selection=self.sessions.index(self.session_text.get())
+            selection=self.sessions.index(self.session_menu_text.get())
         except ValueError:
             return
 
@@ -190,7 +193,8 @@ class Interface(tk.Frame):
         self.notice_label_sess.configure(fg="#bfbcbb", text="Préparations en cours...")
 
         # Executer la selection de session et acquisition de la table de temps
-        self.browser_controller.session_timetable_sequence(selection)
+        classes = self.browser_controller.session_timetable_sequence(selection)
+        self.display_session_classes(classes)
         self.browser_controller.acquire_bloc_distribution_sequence()
 
         self.notice_label_sess.configure(fg="#2bd918", text="Préparations terminées!")
@@ -219,6 +223,17 @@ class Interface(tk.Frame):
             to_add+="\n"
 
         zone.configure(text=zone["text"]+to_add)
+
+    def display_session_classes(self, classes):
+        to_add = ""
+        for i, cl in enumerate(classes):
+            cl = cl[0:8].replace(" ", "")
+            if i%4 == 0:
+                to_add += "\n"
+            if cl not in to_add:
+                to_add += f"{cl}   "
+
+        self.session_text.configure(text=to_add)
 
 # A wrapper of tk.Entry for showing defaults
 class TextField(tk.Entry):

@@ -32,6 +32,7 @@ class TimeTable():
             "D": list()
         }
         raw_classes = [class_name.split("\n")[0] for class_name in raw_classes]
+        self.classes = raw_classes # Added for displaying classes on the UI
 
         for class_day_hours in raw_hours:
             for day_hour in class_day_hours:
@@ -64,7 +65,9 @@ class TimeTable():
 class SectionTimeTable(TimeTable):
     def __init__(self, section_name, raw_hours):
         """
-        A class that symbolises a timetable for a classe's section
+        A class that symbolises a timetable for a classe's section. It
+        implements similar methods and structures to TimeTable,
+        but parses the scrapped data differently.
 
         Parameters
         ----------
@@ -110,6 +113,20 @@ class SectionTimeTable(TimeTable):
 
 class HourInterval():
     def __init__(self, hour_start, hour_end):
+        """
+        This class represents an interval of time between two hours.
+        Typically used to represent the time span of a class.
+
+        Parameters
+        ----------
+        hour_start : str
+            The hour when the class starts.
+            Format is "HH:MM", which is the same format used in synchro.
+        hour_end : str
+            The hour when the class ends.
+            Format is "HH:MM", which is the same format used in synchro
+
+        """
         self.hour_start = float(hour_start.replace(":","."))
         self.hour_end = float(hour_end.replace(":","."))
 

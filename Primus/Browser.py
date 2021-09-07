@@ -32,11 +32,11 @@ from TimeTable import TimeTable, SectionTimeTable, SynchroClass, TimeTree
 # A class that wraps a selenium webdriver to execute retrieval of data from
 # the student center. This class should be instancied from the BrowserController
 class Browser():
-    def __init__(self, controller):
+    def __init__(self, controller, driver_path):
         options = Options()
         options.headless = True
         options.add_argument('-headless')
-        self.driver = webdriver.Firefox(executable_path=GeckoDriverManager().install(),options=options)
+        self.driver = webdriver.Firefox(executable_path=driver_path ,options=options)
         self.controller = controller
 
     def wait_for_load_gif(self):
@@ -67,6 +67,8 @@ class Browser():
         self.driver.find_element_by_id("txtIdentifiant").send_keys(user)
         self.driver.find_element_by_id("txtMDP").send_keys(unip)
         self.driver.find_element_by_id("btnValider").click()
+        # TODO: Determine which page we land on. This will allow us to
+        # notify the user of the specific error which happened, if any.
         if "succès" in self.driver.page_source:
             return True
         else:
@@ -281,9 +283,12 @@ class Browser():
 # an optimised rate
 class BrowserController():
     def __init__(self, ui, threads = 4):
+        tqdm.write("[PRIMUS: BrowserController] - getting latest webdriver release...")
+        # self.driver_path = GeckoDriverManager().install()
+        self.driver_path = "C:\\Users\\Nicolas\\.wdm\\drivers\\geckodriver\\win64\\v0.29.1\\geckodriver.exe"
         tqdm.write(f"[PRIMUS: BrowserController] - creating {threads} browser instances...")
         with concurrent.futures.ThreadPoolExecutor() as exe:
-            futures = [exe.submit(Browser, self) for t in range(threads)]
+            futures = [exe.submit(Browser, self, self.driver_path) for t in range(threads)]
         self.browsers = [b.result() for b in futures]
         tqdm.write(f"[PRIMUS: BrowserController] - browser instances ready.")
         self.ui = ui
@@ -365,6 +370,7 @@ class BrowserController():
         self.browsers[0].select_session(sess_id)
         self.ttb, self.ttb_url = self.browsers[0].acquire_timetable()
         self.sess_id = sess_id
+        return self.ttb.classes # Returning class names to be displayed
 
     def acquire_bloc_distribution_sequence(self):
         """
