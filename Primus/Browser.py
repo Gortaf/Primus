@@ -284,8 +284,7 @@ class Browser():
 class BrowserController():
     def __init__(self, ui, threads = 4):
         tqdm.write("[PRIMUS: BrowserController] - getting latest webdriver release...")
-        # self.driver_path = GeckoDriverManager().install()
-        self.driver_path = "C:\\Users\\Nicolas\\.wdm\\drivers\\geckodriver\\win64\\v0.29.1\\geckodriver.exe"
+        self.driver_path = GeckoDriverManager().install()
         tqdm.write(f"[PRIMUS: BrowserController] - creating {threads} browser instances...")
         with concurrent.futures.ThreadPoolExecutor() as exe:
             futures = [exe.submit(Browser, self, self.driver_path) for t in range(threads)]
